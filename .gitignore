@@ -1,0 +1,7 @@
+*.so
+*.o
+*.a
+
+bin/
+
+.DS_Store
