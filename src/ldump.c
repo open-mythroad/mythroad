@@ -18,10 +18,16 @@
 #define DumpVector(b,n,size,D)	DumpBlock(b,(n)*(size),D)
 #define DumpLiteral(s,D)	DumpBlock("" s,(sizeof(s))-1,D)
 
+typedef enum {
+ CHUNK_LUA50,
+ CHUNK_MRP80
+} ChunkFormat;
+
 typedef struct {
  lua_State* L;
  lua_Chunkwriter write;
  void* data;
+ ChunkFormat format;
 } DumpState;
 
 static void DumpBlock(const void* b, size_t size, DumpState* D)
@@ -55,11 +61,19 @@ static void DumpNumber(lua_Number x, DumpState* D)
 static void DumpString(TString* s, DumpState* D)
 {
  if (s==NULL || getstr(s)==NULL)
-  DumpSize(0,D);
+ {
+  if (D->format==CHUNK_MRP80)
+   DumpInt(0,D);
+  else
+   DumpSize(0,D);
+ }
  else
  {
   size_t size=s->tsv.len+1;		/* include trailing '\0' */
-  DumpSize(size,D);
+  if (D->format==CHUNK_MRP80)
+   DumpInt((int)size,D);
+  else
+   DumpSize(size,D);
   DumpBlock(getstr(s),size,D);
  }
 }
@@ -139,7 +153,7 @@ static void DumpFunction(const Proto* f, const TString* p, DumpState* D)
  DumpCode(f,D);
 }
 
-static void DumpHeader(DumpState* D)
+static void DumpLuaHeader(DumpState* D)
 {
  DumpLiteral(LUA_SIGNATURE,D);
  DumpByte(VERSION,D);
@@ -155,6 +169,21 @@ static void DumpHeader(DumpState* D)
  DumpNumber(TEST_NUMBER,D);
 }
 
+static void DumpMrpHeader(DumpState* D)
+{
+ DumpLiteral(MRP_SIGNATURE,D);
+ DumpByte(MRP_VERSION,D);
+ DumpByte(luaU_endianness(),D);
+}
+
+static void DumpHeader(DumpState* D)
+{
+ if (D->format==CHUNK_MRP80)
+  DumpMrpHeader(D);
+ else
+  DumpLuaHeader(D);
+}
+
 /*
 ** dump function as precompiled chunk
 */
@@ -164,6 +193,11 @@ void luaU_dump (lua_State* L, const Proto* Main, lua_Chunkwriter w, void* data)
  D.L=L;
  D.write=w;
  D.data=data;
+#ifdef MRP_BYTECODE
+ D.format=CHUNK_MRP80;
+#else
+ D.format=CHUNK_LUA50;
+#endif
  DumpHeader(&D);
  DumpFunction(Main,NULL,&D);
 }

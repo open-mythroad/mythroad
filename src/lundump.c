@@ -18,11 +18,17 @@
 
 #define	LoadByte	(lu_byte) ezgetc
 
+typedef enum {
+ CHUNK_LUA50,
+ CHUNK_MRP80
+} ChunkFormat;
+
 typedef struct {
  lua_State* L;
  ZIO* Z;
  Mbuffer* b;
  int swap;
+ ChunkFormat format;
  const char* name;
 } LoadState;
 
@@ -97,7 +103,7 @@ static lua_Number LoadNumber (LoadState* S)
 
 static TString* LoadString (LoadState* S)
 {
- size_t size=LoadSize(S);
+ size_t size=(S->format==CHUNK_MRP80) ? (size_t)LoadInt(S) : LoadSize(S);
  if (size==0)
   return NULL;
  else
@@ -212,6 +218,14 @@ static void LoadSignature (LoadState* S)
  if (*s!=0) luaG_runerror(S->L,"bad signature in %s",S->name);
 }
 
+static void LoadMrpSignature(LoadState* S)
+{
+  const char* s=MRP_SIGNATURE;
+  while (*s!=0 && ezgetc(S)==*s)
+    ++s;
+  if (*s != 0) luaG_runerror(S->L, "bad signature in %s", S->name);
+}
+
 static void TestSize (LoadState* S, int s, const char* what)
 {
  int r=LoadByte(S);
@@ -223,7 +237,7 @@ static void TestSize (LoadState* S, int s, const char* what)
 #define TESTSIZE(s,w)	TestSize(S,s,w)
 #define V(v)		v/16,v%16
 
-static void LoadHeader (LoadState* S)
+static void LoadLuaHeader (LoadState* S)
 {
  int version;
  lua_Number x,tx=TEST_NUMBER;
@@ -251,6 +265,25 @@ static void LoadHeader (LoadState* S)
   luaG_runerror(S->L,"unknown number format in %s",S->name);
 }
 
+static void LoadMrpHeader(LoadState* S)
+{
+  int version;
+  LoadMrpSignature(S);
+  version=LoadByte(S);
+  if (version!=MRP_VERSION)
+    luaG_runerror(S->L, "%s version mismatch: read %d.%d; expected %d.%d",
+                  S->name, V(version), V(MRP_VERSION));
+  S->swap=(luaU_endianness()!=LoadByte(S));
+}
+
+static void LoadHeader (LoadState* S)
+{
+ if (S->format==CHUNK_MRP80)
+  LoadMrpHeader(S);
+ else
+  LoadLuaHeader(S);
+}
+
 static Proto* LoadChunk (LoadState* S)
 {
  LoadHeader(S);
@@ -264,7 +297,7 @@ Proto* luaU_undump (lua_State* L, ZIO* Z, Mbuffer* buff)
 {
  LoadState S;
  const char* s=zname(Z);
- if (*s=='@' || *s=='=')
+ if (*s=='@' || *s=='=' || *s=='$')
   S.name=s+1;
  else if (*s==LUA_SIGNATURE[0])
   S.name="binary string";
@@ -273,6 +306,11 @@ Proto* luaU_undump (lua_State* L, ZIO* Z, Mbuffer* buff)
  S.L=L;
  S.Z=Z;
  S.b=buff;
+#ifdef MRP_BYTECODE
+ S.format=CHUNK_MRP80;
+#else
+ S.format=CHUNK_LUA50;
+#endif
  return LoadChunk(&S);
 }
 

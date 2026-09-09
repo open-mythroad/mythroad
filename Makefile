@@ -65,6 +65,7 @@ echo:
 	@echo "LOADLIB = $(LOADLIB)"
 	@echo "DLLIB = $(DLLIB)"
 	@echo "NUMBER = $(NUMBER)"
+	@echo "BYTECODE = $(BYTECODE)"
 	@echo "POPEN = $(POPEN)"
 	@echo "TMPNAM = $(TMPNAM)"
 	@echo "DEGREES = $(DEGREES)"

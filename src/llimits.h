@@ -114,7 +114,14 @@ typedef LUA_UACNUMBER l_uacNumber;
 ** type for virtual-machine instructions
 ** must be an unsigned with (at least) 4 bytes (see details in lopcodes.h)
 */
+#ifndef MRP_BYTECODE
 typedef unsigned long Instruction;
+#else
+#if BITS_INT < 32
+#error "MRP_BYTECODE requires int with at least 32 bits"
+#endif
+typedef unsigned int Instruction;
+#endif
 
 
 /* maximum depth for calls (unsigned short) */
